@@ -44,9 +44,14 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 			MHints:              make(map[int]compiled.Hint, len(cs.mHints)),
 			MDebug:              make(map[int]int),
 			Counters:            make([]compiled.Counter, len(cs.counters)),
+			PublicNames:         make([]string, len(cs.public.names)),
+			SecretNames:         make([]string, len(cs.secret.names)),
 		},
 		Constraints: make([]compiled.R1C, len(cs.constraints)),
 	}
+
+	copy(res.SecretNames, cs.secret.names)
+	copy(res.PublicNames, cs.public.names)
 
 	// for logs, debugInfo and hints the only thing that will change
 	// is that ID of the wires will be offseted to take into account the final wire vector ordering

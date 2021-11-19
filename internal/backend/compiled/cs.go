@@ -31,7 +31,11 @@ type CS struct {
 	// several constraints may point to the same debug info
 	MDebug map[int]int
 
-	Counters []Counter // TODO @gbotrel no point in serializing these
+	// TODO @gbotrel no point in serializing these
+	Counters []Counter
+
+	// for debug purposes. we may want to conditionally store these w/ a build tag
+	PublicNames, SecretNames []string
 }
 
 // Visibility encodes a Variable (or wire) visibility

@@ -86,6 +86,8 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 				MDebug:              make(map[int]int),
 				MHints:              make(map[int]compiled.Hint, len(cs.mHints)),
 				Counters:            make([]compiled.Counter, len(cs.counters)),
+				PublicNames:         make([]string, len(cs.public.names)-1), // we don't store one
+				SecretNames:         make([]string, len(cs.secret.names)),
 			},
 			Constraints: make([]compiled.SparseR1C, 0, len(cs.constraints)),
 		},
@@ -95,6 +97,9 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 		reducedLE:            make(map[uint64][]innerRecord, len(cs.internal.variables)),
 		reducedLE_:           make(map[uint64]struct{}, len(cs.internal.variables)),
 	}
+
+	copy(res.ccs.SecretNames, cs.secret.names)
+	copy(res.ccs.PublicNames, cs.public.names[1:])
 
 	// logs, debugInfo and hints are copied, the only thing that will change
 	// is that ID of the wires will be offseted to take into account the final wire vector ordering

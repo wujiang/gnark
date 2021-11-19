@@ -36,7 +36,6 @@ integratrion_test/**
 
 # binary
 gnark
-playground
 examples/benchmark/benchmark
 examples/**/*.html
 
