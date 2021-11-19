@@ -77,6 +77,7 @@ func main() {
 				{File: filepath.Join(backendCSDir, "r1cs.go"), Templates: []string{"r1cs.go.tmpl", importCurve}},
 				{File: filepath.Join(backendCSDir, "r1cs_sparse.go"), Templates: []string{"r1cs.sparse.go.tmpl", importCurve}},
 				{File: filepath.Join(backendCSDir, "solution.go"), Templates: []string{"solution.go.tmpl", importCurve}},
+				{File: filepath.Join(backendCSDir, "tohtml.go"), Templates: []string{"tohtml.go.tmpl", importCurve}},
 			}
 			if err := bgen.Generate(d, "cs", "./template/representations/", entries...); err != nil {
 				panic(err)

@@ -23,8 +23,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"strings"
-	"text/template"
 
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/internal/backend/compiled"
@@ -252,39 +250,6 @@ func (cs *SparseR1CS) checkConstraint(c compiled.SparseR1C, solution *solution) 
 	}
 	return nil
 
-}
-
-// ToHTML returns an HTML human-readable representation of the constraint system
-func (cs *SparseR1CS) ToHTML(w io.Writer) error {
-	t, err := template.New("scs.html").Funcs(template.FuncMap{
-		"toHTML":      toHTMLTerm,
-		"toHTMLCoeff": toHTMLCoeff,
-		"add":         add,
-		"sub":         sub,
-	}).Parse(compiled.SparseR1CSTemplate)
-	if err != nil {
-		return err
-	}
-
-	return t.Execute(w, cs)
-}
-
-func toHTMLTerm(t compiled.Term, coeffs []fr.Element, MHints map[int]compiled.Hint) string {
-	var sbb strings.Builder
-	termToHTML(t, &sbb, coeffs, MHints, true)
-	return sbb.String()
-}
-
-func toHTMLCoeff(cID int, coeffs []fr.Element) string {
-	if cID == compiled.CoeffIdMinusOne {
-		// print neg sign
-		return "<span class=\"coefficient\">-1</span>"
-	}
-	var sbb strings.Builder
-	sbb.WriteString("<span class=\"coefficient\">")
-	sbb.WriteString(coeffs[cID].String())
-	sbb.WriteString("</span>")
-	return sbb.String()
 }
 
 // FrSize return fr.Limbs * 8, size in byte of a fr element

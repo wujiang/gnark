@@ -46,9 +46,9 @@ const R1CSTemplate = `
     {{- range $i, $c := .Constraints}}
     <tr>
       <th scope="row">{{$i}}</th>
-	  <td> {{ toHTML $c.L $.Coefficients $.MHints}} </td>
-      <td> {{ toHTML $c.R $.Coefficients $.MHints}} </td>
-      <td> {{ toHTML $c.O $.Coefficients $.MHints}} </td>
+	    <td> {{ formatLinearExpression $c.L $.CS $.Coefficients}} </td>
+      <td> {{ formatLinearExpression $c.R $.CS $.Coefficients}} </td>
+      <td> {{ formatLinearExpression $c.O $.CS $.Coefficients}} </td>
     </tr>
     {{- end }}
   </tbody>
@@ -108,12 +108,12 @@ const SparseR1CSTemplate = `
     {{- range $i, $c := .Constraints}}
     <tr>
 		<th scope="row">{{$i}}</th>
-	  <td> {{ toHTML $c.L $.Coefficients $.MHints}} </td>
-      <td> {{ toHTML $c.R $.Coefficients $.MHints}} </td>
-	  <td> {{ toHTML (index $c.M 0) $.Coefficients $.MHints}} </td>
-	  <td> {{ toHTML (index $c.M 1)  $.Coefficients $.MHints}} </td>
-      <td> {{ toHTML $c.O $.Coefficients $.MHints}} </td>
-	  <td> {{ toHTMLCoeff $c.K $.Coefficients }} </td>
+	  <td> {{ formatTerm $c.L $.CS $.Coefficients true}} </td>
+      <td> {{ formatTerm $c.R $.CS $.Coefficients true}} </td>
+	  <td> {{ formatTerm (index $c.M 0) $.CS $.Coefficients true}} </td>
+	  <td> {{ formatTerm (index $c.M 1)  $.CS $.Coefficients true}} </td>
+      <td> {{ formatTerm $c.O $.CS $.Coefficients true}} </td>
+	  <td> {{ formatCoeff $c.K $.Coefficients }} </td>
     </tr>
     {{- end }}
   </tbody>

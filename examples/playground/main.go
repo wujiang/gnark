@@ -13,20 +13,40 @@ import (
 func main() {
 	var circuit cubic.Circuit
 
-	ccs, err := frontend.Compile(ecc.BN254, backend.GROTH16, &circuit)
-	if err != nil {
-		log.Fatal(err)
+	{
+		ccs, err := frontend.Compile(ecc.BN254, backend.GROTH16, &circuit)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fR1CS, err := os.Create("r1cs.html")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if err := ccs.ToHTML(fR1CS); err != nil {
+			log.Fatal(err)
+		}
+
+		fR1CS.Close()
 	}
 
-	fR1CS, err := os.Create("r1cs.html")
-	if err != nil {
-		log.Fatal(err)
-	}
+	{
+		ccs, err := frontend.Compile(ecc.BN254, backend.PLONK, &circuit)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	if err := ccs.ToHTML(fR1CS); err != nil {
-		log.Fatal(err)
-	}
+		fSCS, err := os.Create("scs.html")
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	fR1CS.Close()
+		if err := ccs.ToHTML(fSCS); err != nil {
+			log.Fatal(err)
+		}
+
+		fSCS.Close()
+	}
 
 }

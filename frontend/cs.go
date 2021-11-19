@@ -149,7 +149,7 @@ func newConstraintSystem(curveID ecc.ID, initialCapacity ...int) constraintSyste
 	cs.virtual.booleans = make(map[int]struct{})
 
 	// by default the circuit is given on public wire equal to 1
-	cs.public.variables.variables[0] = cs.newPublicVariable("one")
+	cs.public.variables.variables[0] = cs.newPublicVariable("1")
 
 	cs.curveID = curveID
 
