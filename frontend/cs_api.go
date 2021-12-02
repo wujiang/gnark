@@ -34,8 +34,7 @@ func (cs *constraintSystem) Add(i1, i2 interface{}, in ...interface{}) Variable 
 	res := make(compiled.Variable, 0, s)
 
 	for _, v := range vars {
-		l := v.Clone()
-		res = append(res, l...)
+		res = append(res, v...)
 	}
 
 	res = cs.reduce(res)
@@ -74,8 +73,7 @@ func (cs *constraintSystem) Sub(i1, i2 interface{}, in ...interface{}) Variable 
 	// allocate resulting Variable
 	res := make(compiled.Variable, 0, s)
 
-	c := vars[0].Clone()
-	res = append(res, c...)
+	res = append(res, vars[0]...)
 	for i := 1; i < len(vars); i++ {
 		negLinExp := cs.negateVariable(vars[i])
 		res = append(res, negLinExp...)
@@ -85,9 +83,11 @@ func (cs *constraintSystem) Sub(i1, i2 interface{}, in ...interface{}) Variable 
 	res = cs.reduce(res)
 
 	if cs.Backend() == backend.PLONK {
+
 		if len(res) == 1 {
 			return res
 		}
+		// TODO @thomas document this
 		_res := cs.newInternalVariable()
 		cs.constraints = append(cs.constraints, newR1C(cs.one(), res, _res))
 		return _res
@@ -264,13 +264,13 @@ func (cs *constraintSystem) Xor(_a, _b Variable) Variable {
 
 	// the formulation used is for easing up the conversion to sparse r1cs
 	res := cs.newInternalVariable()
+
 	c := cs.Neg(res).(compiled.Variable)
 	c = append(c, a[0], b[0])
 	aa := cs.Mul(a, 2)
 	cs.constraints = append(cs.constraints, newR1C(aa, b, c))
 
 	cs.markBoolean(res)
-
 	return res
 }
 
@@ -291,7 +291,6 @@ func (cs *constraintSystem) Or(_a, _b Variable) Variable {
 	cs.constraints = append(cs.constraints, newR1C(a, b, c))
 
 	cs.markBoolean(res)
-
 	return res
 }
 
