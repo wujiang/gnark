@@ -23,32 +23,25 @@ import (
 // errNoValue triggered when trying to access a variable that was not allocated
 var errNoValue = errors.New("can't determine API input value")
 
-type LinearExpression []Term
-
 // Variable represent a linear expression of wires
-type Variable struct {
-	LinExp    LinearExpression
-	IsBoolean *bool
-}
+type Variable []Term
 
 // Clone returns a copy of the underlying slice
 func (v Variable) Clone() Variable {
-	var res Variable
-	res.IsBoolean = v.IsBoolean
-	res.LinExp = make([]Term, len(v.LinExp))
-	copy(res.LinExp, v.LinExp)
+	res := make(Variable, len(v))
+	copy(res, v)
 	return res
 }
 
 // Len return the lenght of the Variable (implements Sort interface)
-func (v LinearExpression) Len() int {
+func (v Variable) Len() int {
 	return len(v)
 }
 
 // Equals returns true if both SORTED expressions are the same
 //
 // pre conditions: l and o are sorted
-func (v LinearExpression) Equal(o LinearExpression) bool {
+func (v Variable) Equal(o Variable) bool {
 	if len(v) != len(o) {
 		return false
 	}
@@ -64,12 +57,12 @@ func (v LinearExpression) Equal(o LinearExpression) bool {
 }
 
 // Swap swaps terms in the Variable (implements Sort interface)
-func (v LinearExpression) Swap(i, j int) {
+func (v Variable) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
 // Less returns true if variableID for term at i is less than variableID for term at j (implements Sort interface)
-func (v LinearExpression) Less(i, j int) bool {
+func (v Variable) Less(i, j int) bool {
 	_, iID, iVis := v[i].Unpack()
 	_, jID, jVis := v[j].Unpack()
 	if iVis == jVis {
@@ -79,9 +72,9 @@ func (v LinearExpression) Less(i, j int) bool {
 }
 
 func (v Variable) string(sbb *strings.Builder, coeffs []big.Int) {
-	for i := 0; i < len(v.LinExp); i++ {
-		v.LinExp[i].string(sbb, coeffs)
-		if i+1 < len(v.LinExp) {
+	for i := 0; i < len(v); i++ {
+		v[i].string(sbb, coeffs)
+		if i+1 < len(v) {
 			sbb.WriteString(" + ")
 		}
 	}
@@ -94,17 +87,17 @@ func (v Variable) string(sbb *strings.Builder, coeffs []big.Int) {
 // since a was not in the circuit struct it is not a secret variable
 func (v Variable) AssertIsSet() {
 
-	if len(v.LinExp) == 0 {
+	if len(v) == 0 {
 		panic(errNoValue)
 	}
 
 }
 
 // isConstant returns true if the variable is ONE_WIRE * coeff
-func (v *Variable) IsConstant() bool {
-	if len(v.LinExp) != 1 {
+func (v Variable) IsConstant() bool {
+	if len(v) != 1 {
 		return false
 	}
-	_, vID, visibility := v.LinExp[0].Unpack()
+	_, vID, visibility := v[0].Unpack()
 	return vID == 0 && visibility == Public
 }

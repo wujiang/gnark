@@ -62,6 +62,14 @@ type constraintSystem struct {
 
 	mDebug map[int]int // maps constraint ID to debugInfo id
 
+	// keep track of Variable that are boolean constrained
+	// in most of the cases, range checks, and, xor, or, toBinary, len(v) == 1
+	// the only case where we don't have that is AssertIsBoolean, which can takes an arbitrarly large linear expression
+	// mTBooleans represent the first, common case with a fast path
+	// mLBooleans represent the second, slowest path. key is a hash code of the variable, contains all colliding linear expressions with same hash code
+	mTBooleans map[compiled.Term]struct{}
+	mLBooleans map[uint64][]compiled.Variable
+
 	counters []Counter // statistic counters
 
 	curveID   ecc.ID
@@ -104,6 +112,8 @@ func newConstraintSystem(curveID ecc.ID, backendID backend.ID, initialCapacity .
 		mHints:            make(map[int]compiled.Hint),
 		mHintsConstrained: make(map[int]bool),
 		counters:          make([]Counter, 0),
+		mTBooleans:        make(map[compiled.Term]struct{}),
+		mLBooleans:        make(map[uint64][]compiled.Variable),
 	}
 
 	cs.coeffs[compiled.CoeffIdZero].SetInt64(0)
@@ -146,7 +156,7 @@ func newConstraintSystem(curveID ecc.ID, backendID backend.ID, initialCapacity .
 func (cs *constraintSystem) NewHint(f hint.Function, inputs ...interface{}) Variable {
 	// create resulting wire
 	r := cs.newInternalVariable()
-	_, vID, _ := r.LinExp[0].Unpack()
+	_, vID, _ := r[0].Unpack()
 
 	// mark hint as unconstrained, for now
 	cs.mHintsConstrained[vID] = false
@@ -173,11 +183,8 @@ func (cs *constraintSystem) bitLen() int {
 }
 
 func (cs *constraintSystem) one() compiled.Variable {
-	t := false
-	return compiled.Variable{
-		LinExp:    compiled.LinearExpression{compiled.Pack(0, compiled.CoeffIdOne, compiled.Public)},
-		IsBoolean: &t,
-	}
+	// TODO @gbotrel should we mark it as boolean?
+	return compiled.Variable{compiled.Pack(0, compiled.CoeffIdOne, compiled.Public)}
 }
 
 // Term packs a Variable and a coeff in a Term and returns it.
@@ -200,7 +207,7 @@ func newR1C(_l, _r, _o Variable) compiled.R1C {
 	// the "r" linear expression is going to end up in the B matrix
 	// the less Variable we have appearing in the B matrix, the more likely groth16.Setup
 	// is going to produce infinity points in pk.G1.B and pk.G2.B, which will speed up proving time
-	if len(l.LinExp) > len(r.LinExp) {
+	if len(l) > len(r) {
 		l, r = r, l
 	}
 
@@ -215,10 +222,9 @@ func (cs *constraintSystem) NbConstraints() int {
 
 // LinearExpression packs a list of Term in a LinearExpression and returns it.
 func (cs *constraintSystem) LinearExpression(terms ...compiled.Term) compiled.Variable {
-	var res compiled.Variable
-	res.LinExp = make([]compiled.Term, len(terms))
+	res := make(compiled.Variable, len(terms))
 	for i, args := range terms {
-		res.LinExp[i] = args
+		res[i] = args
 	}
 	return res
 }
@@ -229,19 +235,19 @@ func (cs *constraintSystem) LinearExpression(terms ...compiled.Term) compiled.Va
 // for each visibility, the Variables are sorted from lowest ID to highest ID
 func (cs *constraintSystem) reduce(l compiled.Variable) compiled.Variable {
 	// ensure our linear expression is sorted, by visibility and by Variable ID
-	if !sort.IsSorted(l.LinExp) { // may not help
-		sort.Sort(l.LinExp)
+	if !sort.IsSorted(l) { // may not help
+		sort.Sort(l)
 	}
 
 	var c big.Int
-	for i := 1; i < len(l.LinExp); i++ {
-		pcID, pvID, pVis := l.LinExp[i-1].Unpack()
-		ccID, cvID, cVis := l.LinExp[i].Unpack()
+	for i := 1; i < len(l); i++ {
+		pcID, pvID, pVis := l[i-1].Unpack()
+		ccID, cvID, cVis := l[i].Unpack()
 		if pVis == cVis && pvID == cvID {
 			// we have redundancy
 			c.Add(&cs.coeffs[pcID], &cs.coeffs[ccID])
-			l.LinExp[i-1].SetCoeffID(cs.coeffID(&c))
-			l.LinExp = append(l.LinExp[:i], l.LinExp[i+1:]...)
+			l[i-1].SetCoeffID(cs.coeffID(&c))
+			l = append(l[:i], l[i+1:]...)
 			i--
 		}
 	}
@@ -299,48 +305,23 @@ func (cs *constraintSystem) addConstraint(r1c compiled.R1C, debugID ...int) {
 // newInternalVariable creates a new wire, appends it on the list of wires of the circuit, sets
 // the wire's id to the number of wires, and returns it
 func (cs *constraintSystem) newInternalVariable() compiled.Variable {
-	t := false
 	idx := cs.internal
 	cs.internal++
-	return compiled.Variable{
-		LinExp:    compiled.LinearExpression{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Internal)},
-		IsBoolean: &t,
-	}
+	return compiled.Variable{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Internal)}
 }
 
 // newPublicVariable creates a new public Variable
 func (cs *constraintSystem) newPublicVariable(name string) compiled.Variable {
-	t := false
 	idx := len(cs.public)
 	cs.public = append(cs.public, name)
-	res := compiled.Variable{
-		LinExp:    compiled.LinearExpression{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Public)},
-		IsBoolean: &t,
-	}
-	return res
+	return compiled.Variable{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Public)}
 }
 
 // newSecretVariable creates a new secret Variable
 func (cs *constraintSystem) newSecretVariable(name string) compiled.Variable {
-	t := false
 	idx := len(cs.secret)
 	cs.secret = append(cs.secret, name)
-	res := compiled.Variable{
-		LinExp:    compiled.LinearExpression{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Secret)},
-		IsBoolean: &t,
-	}
-	return res
-}
-
-// markBoolean marks the Variable as boolean and return true
-// if a constraint was added, false if the Variable was already
-// constrained as a boolean
-func (cs *constraintSystem) markBoolean(v compiled.Variable) bool {
-	if *v.IsBoolean {
-		return false
-	}
-	*v.IsBoolean = true
-	return true
+	return compiled.Variable{compiled.Pack(idx, compiled.CoeffIdOne, compiled.Secret)}
 }
 
 // checkVariables perform post compilation checks on the Variables
@@ -361,7 +342,7 @@ func (cs *constraintSystem) checkVariables() error {
 
 	// for each constraint, we check the linear expressions and mark our inputs / hints as constrained
 	processLinearExpression := func(l compiled.Variable) {
-		for _, t := range l.LinExp {
+		for _, t := range l {
 			if t.CoeffID() == compiled.CoeffIdZero {
 				// ignore zero coefficient, as it does not constraint the Variable
 				// though, we may want to flag that IF the Variable doesn't appear else where
@@ -447,4 +428,94 @@ func (cs *constraintSystem) CurveID() ecc.ID {
 
 func (cs *constraintSystem) Backend() backend.ID {
 	return cs.backendID
+}
+
+// markBoolean marks the Variable as boolean. Goal is to avoid adding multiple boolean constraint
+// on the same variable (which was already previously boolean constrained)
+func (cs *constraintSystem) markBoolean(v compiled.Variable) {
+	v.AssertIsSet()
+	// in most of the cases, range checks, and, xor, or, toBinary, len(v) == 1
+	// the only case where we don't have that is AssertIsBoolean, which can takes an arbitrarly large linear expression
+	if len(v) == 1 {
+		cs.mTBooleans[v[0]] = struct{}{}
+		return
+	}
+
+	_v := v.Clone()
+	sort.Sort(_v)
+	key := hashCode(_v)
+	l, ok := cs.mLBooleans[key]
+	if ok {
+		// let's ensure we didn't already record it
+		for _, i := range l {
+			if i.Equal(_v) {
+				return
+			}
+		}
+	}
+	cs.mLBooleans[key] = append(l, _v)
+}
+
+func (cs *constraintSystem) isBoolean(v compiled.Variable) bool {
+	v.AssertIsSet()
+	if len(v) == 1 {
+		_, ok := cs.mTBooleans[v[0]]
+		return ok
+	}
+
+	_v := v.Clone()
+	sort.Sort(_v)
+	key := hashCode(_v)
+	l, ok := cs.mLBooleans[key]
+	if !ok {
+		return false
+	}
+	if ok {
+		// let's ensure we didn't already record it
+		for _, i := range l {
+			if i.Equal(_v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TODO this is a weird hack in plonk frontend, must die.
+func (cs *constraintSystem) unmarkBoolean(v compiled.Variable) {
+	v.AssertIsSet()
+
+	if len(v) == 1 {
+		delete(cs.mTBooleans, v[0])
+		return
+	}
+
+	_v := v.Clone()
+	sort.Sort(_v)
+	key := hashCode(_v)
+	l, ok := cs.mLBooleans[key]
+	if !ok {
+		return // nothing to delete
+	}
+
+	for i, vi := range l {
+		if vi.Equal(_v) {
+			l[i] = l[len(l)-1]
+			cs.mLBooleans[key] = l[:len(l)-1]
+			return
+		}
+	}
+
+}
+
+// hashCode returns a fast hash of the linear expression; this is not collision resistant
+// but two SORTED equal linear expressions will have equal hashes.
+//
+// pre conditions: l is sorted
+func hashCode(v compiled.Variable) uint64 {
+	hashcode := uint64(1)
+	for i := 0; i < len(v); i++ {
+		hashcode = hashcode*31 + uint64(v[i])
+	}
+	return hashcode
 }

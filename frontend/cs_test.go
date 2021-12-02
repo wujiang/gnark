@@ -27,7 +27,7 @@ import (
 
 func TestQuickSort(t *testing.T) {
 
-	toSort := make(compiled.LinearExpression, 12)
+	toSort := make(compiled.Variable, 12)
 	rand := 3
 	for i := 0; i < 12; i++ {
 		toSort[i].SetVariableVisibility(compiled.Secret)
@@ -65,7 +65,7 @@ func TestReduce(t *testing.T) {
 	toTest := (cs.Add(a, b, c, d, e, f)).(compiled.Variable)
 
 	// check sizes
-	if len(toTest.LinExp) != 3 {
+	if len(toTest) != 3 {
 		t.Fatal("Error reduce, duplicate variables not collapsed")
 	}
 
@@ -75,9 +75,9 @@ func TestFindUnsolvedVariable(t *testing.T) {
 	sizeLe := 10
 	totalInternalVariables := 3 * sizeLe / 2
 
-	l := make(compiled.LinearExpression, sizeLe)
-	r := make(compiled.LinearExpression, sizeLe)
-	o := make(compiled.LinearExpression, sizeLe)
+	l := make(compiled.Variable, sizeLe)
+	r := make(compiled.Variable, sizeLe)
+	o := make(compiled.Variable, sizeLe)
 	for i := 0; i < sizeLe/2; i++ {
 		l[i] = compiled.Pack(3*i, i, compiled.Internal)
 		l[i+sizeLe/2] = compiled.Pack(3*i, i, compiled.Public)
@@ -95,7 +95,7 @@ func TestFindUnsolvedVariable(t *testing.T) {
 	for i := 0; i < totalInternalVariables; i++ {
 		solvedVariables[i] = true
 	}
-	r1c := compiled.R1C{L: compiled.Variable{LinExp: l}, R: compiled.Variable{LinExp: r}, O: compiled.Variable{LinExp: o}}
+	r1c := compiled.R1C{L: l, R: r, O: o}
 
 	for i := 0; i < totalInternalVariables; i++ {
 		solvedVariables[i] = false

@@ -46,10 +46,11 @@ func (cs *constraintSystem) AssertIsBoolean(i1 interface{}) {
 	vars, _ := cs.toVariables(i1)
 	v := vars[0]
 
-	if *v.IsBoolean {
-		return // compiled.Variable is already constrained
+	if cs.isBoolean(v) {
+		// already boolean
+		return
 	}
-	*v.IsBoolean = true
+	cs.markBoolean(v)
 
 	if v.IsConstant() {
 		c := cs.constantValue(v)
@@ -68,7 +69,7 @@ func (cs *constraintSystem) AssertIsBoolean(i1 interface{}) {
 	if cs.backendID == backend.PLONK {
 		one := cs.one()
 		_v := cs.Neg(v).(compiled.Variable)
-		r := compiled.Variable{LinExp: []compiled.Term{one.LinExp[0], _v.LinExp[0]}}
+		r := compiled.Variable{one[0], _v[0]}
 
 		cs.addConstraint(newR1C(v, r, o), debug)
 		return

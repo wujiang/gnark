@@ -58,7 +58,7 @@ func (cs *constraintSystem) Println(a ...interface{}) {
 			// we set limits to the linear expression, so that the log printer
 			// can evaluate it before printing it
 			log.ToResolve = append(log.ToResolve, compiled.TermDelimitor)
-			log.ToResolve = append(log.ToResolve, v.LinExp...)
+			log.ToResolve = append(log.ToResolve, v...)
 			log.ToResolve = append(log.ToResolve, compiled.TermDelimitor)
 		} else {
 			printArg(&log, &sbb, arg)
@@ -102,7 +102,7 @@ func printArg(log *compiled.LogEntry, sbb *strings.Builder, a interface{}) {
 		// we set limits to the linear expression, so that the log printer
 		// can evaluate it before printing it
 		log.ToResolve = append(log.ToResolve, compiled.TermDelimitor)
-		log.ToResolve = append(log.ToResolve, v.LinExp...)
+		log.ToResolve = append(log.ToResolve, v...)
 		log.ToResolve = append(log.ToResolve, compiled.TermDelimitor)
 		return nil
 	}
@@ -124,11 +124,11 @@ func (cs *constraintSystem) addDebugInfo(errName string, i ...interface{}) int {
 	for _, _i := range i {
 		switch v := _i.(type) {
 		case compiled.Variable:
-			if len(v.LinExp) > 1 {
+			if len(v) > 1 {
 				sbb.WriteString("(")
 			}
 			l.WriteVariable(v, &sbb)
-			if len(v.LinExp) > 1 {
+			if len(v) > 1 {
 				sbb.WriteString(")")
 			}
 

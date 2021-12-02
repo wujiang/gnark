@@ -163,15 +163,15 @@ func (cs *R1CS) mulByCoeff(res *fr.Element, t compiled.Term) {
 // it instantiates the l, r o part of a R1C
 func (cs *R1CS) instantiateR1C(r compiled.R1C, solution *solution) (a, b, c fr.Element) {
 	var v fr.Element
-	for _, t := range r.L.LinExp {
+	for _, t := range r.L {
 		v = solution.computeTerm(t)
 		a.Add(&a, &v)
 	}
-	for _, t := range r.R.LinExp {
+	for _, t := range r.R {
 		v = solution.computeTerm(t)
 		b.Add(&b, &v)
 	}
-	for _, t := range r.O.LinExp {
+	for _, t := range r.O {
 		v = solution.computeTerm(t)
 		c.Add(&c, &v)
 	}
@@ -224,19 +224,19 @@ func (cs *R1CS) solveConstraint(r compiled.R1C, solution *solution) error {
 		return nil
 	}
 
-	for _, t := range r.L.LinExp {
+	for _, t := range r.L {
 		if err := processTerm(t, &a, 1); err != nil {
 			return err
 		}
 	}
 
-	for _, t := range r.R.LinExp {
+	for _, t := range r.R {
 		if err := processTerm(t, &b, 2); err != nil {
 			return err
 		}
 	}
 
-	for _, t := range r.O.LinExp {
+	for _, t := range r.O {
 		if err := processTerm(t, &c, 3); err != nil {
 			return err
 		}
@@ -305,9 +305,9 @@ func sub(a, b int) int {
 
 func toHTML(l compiled.Variable, coeffs []fr.Element, MHints map[int]compiled.Hint) string {
 	var sbb strings.Builder
-	for i := 0; i < len(l.LinExp); i++ {
-		termToHTML(l.LinExp[i], &sbb, coeffs, MHints, false)
-		if i+1 < len(l.LinExp) {
+	for i := 0; i < len(l); i++ {
+		termToHTML(l[i], &sbb, coeffs, MHints, false)
+		if i+1 < len(l) {
 			sbb.WriteString(" + ")
 		}
 	}

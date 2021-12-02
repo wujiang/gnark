@@ -93,7 +93,7 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 	}
 
 	// we just need to offset our ids, such that wires = [ public wires  | secret wires | internal wires ]
-	offsetIDs := func(l compiled.LinearExpression) {
+	offsetIDs := func(l compiled.Variable) {
 		for j := 0; j < len(l); j++ {
 			_, vID, visibility := l[j].Unpack()
 			l[j].SetWireID(shiftVID(vID, visibility))
@@ -101,9 +101,9 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 	}
 
 	for i := 0; i < len(res.Constraints); i++ {
-		offsetIDs(res.Constraints[i].L.LinExp)
-		offsetIDs(res.Constraints[i].R.LinExp)
-		offsetIDs(res.Constraints[i].O.LinExp)
+		offsetIDs(res.Constraints[i].L)
+		offsetIDs(res.Constraints[i].R)
+		offsetIDs(res.Constraints[i].O)
 	}
 
 	// we need to offset the ids in the hints
@@ -112,7 +112,7 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 		inputs := make([]compiled.Variable, len(hint.Inputs))
 		copy(inputs, hint.Inputs)
 		for j := 0; j < len(inputs); j++ {
-			offsetIDs(inputs[j].LinExp)
+			offsetIDs(inputs[j])
 		}
 		res.MHints[k] = compiled.Hint{ID: hint.ID, Inputs: inputs}
 	}
@@ -121,7 +121,7 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 	for i := 0; i < len(cs.logs); i++ {
 		res.Logs[i] = compiled.LogEntry{
 			Format:    cs.logs[i].Format,
-			ToResolve: make([]compiled.Term, len(cs.logs[i].ToResolve)),
+			ToResolve: make(compiled.Variable, len(cs.logs[i].ToResolve)),
 		}
 		copy(res.Logs[i].ToResolve, cs.logs[i].ToResolve)
 
@@ -133,7 +133,7 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 	for i := 0; i < len(cs.debugInfo); i++ {
 		res.DebugInfo[i] = compiled.LogEntry{
 			Format:    cs.debugInfo[i].Format,
-			ToResolve: make([]compiled.Term, len(cs.debugInfo[i].ToResolve)),
+			ToResolve: make(compiled.Variable, len(cs.debugInfo[i].ToResolve)),
 		}
 		copy(res.DebugInfo[i].ToResolve, cs.debugInfo[i].ToResolve)
 

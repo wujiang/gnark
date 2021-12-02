@@ -31,18 +31,17 @@ func (cs *constraintSystem) Add(i1, i2 interface{}, in ...interface{}) Variable 
 	vars, s := cs.toVariables(append([]interface{}{i1, i2}, in...)...)
 
 	// allocate resulting Variable
-	t := false
-	res := compiled.Variable{LinExp: make([]compiled.Term, 0, s), IsBoolean: &t}
+	res := make(compiled.Variable, 0, s)
 
 	for _, v := range vars {
 		l := v.Clone()
-		res.LinExp = append(res.LinExp, l.LinExp...)
+		res = append(res, l...)
 	}
 
 	res = cs.reduce(res)
 
 	if cs.Backend() == backend.PLONK {
-		if len(res.LinExp) == 1 {
+		if len(res) == 1 {
 			return res
 		}
 		_res := cs.newInternalVariable()
@@ -63,10 +62,7 @@ func (cs *constraintSystem) Neg(i interface{}) Variable {
 		return cs.constant(n)
 	}
 
-	// ok to pass pointer since if i is boolean constrained later, so must be res
-	res := compiled.Variable{LinExp: cs.negateLinExp(vars[0].LinExp), IsBoolean: vars[0].IsBoolean}
-
-	return res
+	return cs.negateVariable(vars[0])
 }
 
 // Sub returns res = i1 - i2
@@ -76,24 +72,20 @@ func (cs *constraintSystem) Sub(i1, i2 interface{}, in ...interface{}) Variable 
 	vars, s := cs.toVariables(append([]interface{}{i1, i2}, in...)...)
 
 	// allocate resulting Variable
-	t := false
-	res := compiled.Variable{
-		LinExp:    make([]compiled.Term, 0, s),
-		IsBoolean: &t,
-	}
+	res := make(compiled.Variable, 0, s)
 
 	c := vars[0].Clone()
-	res.LinExp = append(res.LinExp, c.LinExp...)
+	res = append(res, c...)
 	for i := 1; i < len(vars); i++ {
-		negLinExp := cs.negateLinExp(vars[i].LinExp)
-		res.LinExp = append(res.LinExp, negLinExp...)
+		negLinExp := cs.negateVariable(vars[i])
+		res = append(res, negLinExp...)
 	}
 
 	// reduce linear expression
 	res = cs.reduce(res)
 
 	if cs.Backend() == backend.PLONK {
-		if len(res.LinExp) == 1 {
+		if len(res) == 1 {
 			return res
 		}
 		_res := cs.newInternalVariable()
@@ -149,7 +141,7 @@ func (cs *constraintSystem) mulConstant(v1, constant compiled.Variable) compiled
 	res := v1.Clone()
 	lambda := cs.constantValue(constant)
 
-	for i, t := range v1.LinExp {
+	for i, t := range v1 {
 		cID, vID, visibility := t.Unpack()
 		var newCoeff big.Int
 		switch cID {
@@ -165,10 +157,8 @@ func (cs *constraintSystem) mulConstant(v1, constant compiled.Variable) compiled
 			coeff := cs.coeffs[cID]
 			newCoeff.Mul(&coeff, lambda)
 		}
-		res.LinExp[i] = compiled.Pack(vID, cs.coeffID(&newCoeff), visibility)
+		res[i] = compiled.Pack(vID, cs.coeffID(&newCoeff), visibility)
 	}
-	t := false
-	res.IsBoolean = &t
 	return res
 }
 
@@ -274,14 +264,12 @@ func (cs *constraintSystem) Xor(_a, _b Variable) Variable {
 
 	// the formulation used is for easing up the conversion to sparse r1cs
 	res := cs.newInternalVariable()
-	res.IsBoolean = new(bool)
-	*res.IsBoolean = true
 	c := cs.Neg(res).(compiled.Variable)
-	c.IsBoolean = new(bool)
-	*c.IsBoolean = false
-	c.LinExp = append(c.LinExp, a.LinExp[0], b.LinExp[0])
+	c = append(c, a[0], b[0])
 	aa := cs.Mul(a, 2)
 	cs.constraints = append(cs.constraints, newR1C(aa, b, c))
+
+	cs.markBoolean(res)
 
 	return res
 }
@@ -298,13 +286,11 @@ func (cs *constraintSystem) Or(_a, _b Variable) Variable {
 
 	// the formulation used is for easing up the conversion to sparse r1cs
 	res := cs.newInternalVariable()
-	res.IsBoolean = new(bool)
-	*res.IsBoolean = true
 	c := cs.Neg(res).(compiled.Variable)
-	c.IsBoolean = new(bool)
-	*c.IsBoolean = false
-	c.LinExp = append(c.LinExp, a.LinExp[0], b.LinExp[0])
+	c = append(c, a[0], b[0])
 	cs.constraints = append(cs.constraints, newR1C(a, b, c))
+
+	cs.markBoolean(res)
 
 	return res
 }
@@ -320,6 +306,8 @@ func (cs *constraintSystem) And(_a, _b Variable) Variable {
 	cs.AssertIsBoolean(b)
 
 	res := cs.Mul(a, b)
+
+	cs.markBoolean(res.(compiled.Variable))
 
 	return res
 }
@@ -452,7 +440,7 @@ func (cs *constraintSystem) FromBinary(_b ...interface{}) Variable {
 	var c big.Int
 	c.SetUint64(1)
 
-	L := make([]compiled.Term, len(b))
+	L := make(compiled.Variable, len(b))
 	for i := 0; i < len(L); i++ {
 		v = cs.Mul(c, b[i])      // no constraint is recorded
 		res = cs.Add(v, res)     // no constraint is recorded
@@ -569,7 +557,7 @@ func (cs *constraintSystem) constant(input interface{}) Variable {
 			return cs.one()
 		}
 		r := cs.one()
-		r.LinExp[0] = cs.setCoeff(r.LinExp[0], &n)
+		r[0] = cs.setCoeff(r[0], &n)
 		return r
 	}
 }
@@ -581,7 +569,7 @@ func (cs *constraintSystem) toVariables(in ...interface{}) ([]compiled.Variable,
 	e := func(i interface{}) {
 		v := cs.constant(i).(compiled.Variable)
 		r = append(r, v)
-		s += len(v.LinExp)
+		s += len(v)
 	}
 	// e(i1)
 	// e(i2)
@@ -592,8 +580,8 @@ func (cs *constraintSystem) toVariables(in ...interface{}) ([]compiled.Variable,
 }
 
 // returns -le, the result is a copy
-func (cs *constraintSystem) negateLinExp(l []compiled.Term) []compiled.Term {
-	res := make([]compiled.Term, len(l))
+func (cs *constraintSystem) negateVariable(l compiled.Variable) compiled.Variable {
+	res := make(compiled.Variable, len(l))
 	var lambda big.Int
 	for i, t := range l {
 		cID, vID, visibility := t.Unpack()

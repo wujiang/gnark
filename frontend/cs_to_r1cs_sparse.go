@@ -172,7 +172,7 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 	for i := 0; i < len(cs.logs); i++ {
 		res.ccs.Logs[i] = compiled.LogEntry{
 			Format:    cs.logs[i].Format,
-			ToResolve: make([]compiled.Term, len(cs.logs[i].ToResolve)),
+			ToResolve: make(compiled.Variable, len(cs.logs[i].ToResolve)),
 		}
 		copy(res.ccs.Logs[i].ToResolve, cs.logs[i].ToResolve)
 
@@ -183,7 +183,7 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 	for i := 0; i < len(cs.debugInfo); i++ {
 		res.ccs.DebugInfo[i] = compiled.LogEntry{
 			Format:    cs.debugInfo[i].Format,
-			ToResolve: make([]compiled.Term, len(cs.debugInfo[i].ToResolve)),
+			ToResolve: make(compiled.Variable, len(cs.debugInfo[i].ToResolve)),
 		}
 		copy(res.ccs.DebugInfo[i].ToResolve, cs.debugInfo[i].ToResolve)
 
@@ -198,8 +198,8 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 		inputs := make([]compiled.Variable, len(hint.Inputs))
 		copy(inputs, hint.Inputs)
 		for j := 0; j < len(inputs); j++ {
-			for k := 0; k < len(inputs[j].LinExp); k++ {
-				offsetTermID(&inputs[j].LinExp[k])
+			for k := 0; k < len(inputs[j]); k++ {
+				offsetTermID(&inputs[j][k])
 			}
 		}
 		res.ccs.MHints[k] = compiled.Hint{ID: hint.ID, Inputs: inputs}
@@ -245,20 +245,20 @@ func (cs *constraintSystem) toSparseR1CS(curveID ecc.ID) (CompiledConstraintSyst
 // slice hold the record of which variables have been solved.
 func findUnsolvedVariable(r1c compiled.R1C, solvedVariables []bool) (int, int) {
 	// find the variable to solve among L,R,O. pos=0,1,2 corresponds to left,right,o.
-	for i := 0; i < len(r1c.L.LinExp); i++ {
-		_, vID, visibility := r1c.L.LinExp[i].Unpack()
+	for i := 0; i < len(r1c.L); i++ {
+		_, vID, visibility := r1c.L[i].Unpack()
 		if visibility == compiled.Internal && !solvedVariables[vID] {
 			return 0, vID
 		}
 	}
-	for i := 0; i < len(r1c.R.LinExp); i++ {
-		_, vID, visibility := r1c.R.LinExp[i].Unpack()
+	for i := 0; i < len(r1c.R); i++ {
+		_, vID, visibility := r1c.R[i].Unpack()
 		if visibility == compiled.Internal && !solvedVariables[vID] {
 			return 1, vID
 		}
 	}
-	for i := 0; i < len(r1c.O.LinExp); i++ {
-		_, vID, visibility := r1c.O.LinExp[i].Unpack()
+	for i := 0; i < len(r1c.O); i++ {
+		_, vID, visibility := r1c.O[i].Unpack()
 		if visibility == compiled.Internal && !solvedVariables[vID] {
 			return 2, vID
 		}
@@ -373,7 +373,7 @@ func (scs *sparseR1CS) multiply(t compiled.Term, c *big.Int) compiled.Term {
 // v0 := 2a + 3b
 // v1 := v0 + c
 // return v1
-func (scs *sparseR1CS) split(acc compiled.Term, l compiled.LinearExpression) compiled.Term {
+func (scs *sparseR1CS) split(acc compiled.Term, l compiled.Variable) compiled.Term {
 
 	// floor case
 	if len(l) == 0 {
@@ -419,51 +419,55 @@ func (scs *sparseR1CS) r1cToSparseR1C(r1c compiled.R1C) {
 		scs.solvedVariables[idCS] = true
 	}
 
-	s := len(r1c.R.LinExp)
+	s := len(r1c.R)
 
 	// special case: boolean constraint
-	if *r1c.L.IsBoolean && lro == -1 { //} && len(r1c.L.LinExp) == 1 && scs.IsConstant(r1c.L) {
-		lz := r1c.L.LinExp[0]
+
+	if scs.isBoolean(r1c.L) && lro == -1 { //} && len(r1c.L) == 1 && scs.IsConstant(r1c.L) {
+		lz := r1c.L[0]
 		lz.SetCoeffID(compiled.CoeffIdZero)
 		var oz compiled.Term
 		oz.SetCoeffID(compiled.CoeffIdZero)
 		scs.addConstraint(compiled.SparseR1C{
-			L: r1c.L.LinExp[0],
+			L: r1c.L[0],
 			R: lz,
-			M: [2]compiled.Term{r1c.L.LinExp[0], scs.negate(r1c.L.LinExp[0])},
+			M: [2]compiled.Term{r1c.L[0], scs.negate(r1c.L[0])},
 			O: oz,
 			K: compiled.CoeffIdZero,
 		})
-		*r1c.L.IsBoolean = false //-> so next time there's a constraint with the same pattern (L*(a+b)=c), we don't go there
+
+		//-> so next time there's a constraint with the same pattern (L*(a+b)=c), we don't go there
+		scs.unmarkBoolean(r1c.L) // TODO @gbotrel fixme
+
 		return
 	}
 
 	// special cases: OR (XY=X+Y-res) and XOR (2XY = X+Y-res)
-	if len(r1c.O.LinExp) == 3 {
+	if len(r1c.O) == 3 {
 
-		cl, _, _ := r1c.L.LinExp[0].Unpack()
-		cr, _, _ := r1c.R.LinExp[0].Unpack()
+		cl, _, _ := r1c.L[0].Unpack()
+		cr, _, _ := r1c.R[0].Unpack()
 
 		// OR
 		if cl == cr {
 			coeffID := compiled.CoeffIdZero
 			scs.addConstraint(compiled.SparseR1C{
-				L: scs.negate(r1c.L.LinExp[0]),
-				R: scs.negate(r1c.R.LinExp[0]),
-				M: [2]compiled.Term{r1c.L.LinExp[0], r1c.R.LinExp[0]},
-				O: scs.negate(r1c.O.LinExp[0]),
+				L: scs.negate(r1c.L[0]),
+				R: scs.negate(r1c.R[0]),
+				M: [2]compiled.Term{r1c.L[0], r1c.R[0]},
+				O: scs.negate(r1c.O[0]),
 				K: coeffID,
 			})
 		} else { //XOR (the only remaining possible case)
 			coeffID := compiled.CoeffIdZero
-			_l := r1c.L.LinExp[0]
+			_l := r1c.L[0]
 			_l.SetCoeffID(cr)
 			_l = scs.negate(_l)
 			scs.addConstraint(compiled.SparseR1C{
 				L: _l,
-				R: scs.negate(r1c.R.LinExp[0]),
-				M: [2]compiled.Term{r1c.L.LinExp[0], r1c.R.LinExp[0]},
-				O: scs.negate(r1c.O.LinExp[0]),
+				R: scs.negate(r1c.R[0]),
+				M: [2]compiled.Term{r1c.L[0], r1c.R[0]},
+				O: scs.negate(r1c.O[0]),
 				K: coeffID,
 			})
 		}
@@ -474,10 +478,10 @@ func (scs *sparseR1CS) r1cToSparseR1C(r1c compiled.R1C) {
 	// or a operation of type Mul, Div, Inv.
 	if lro == -1 || s == 1 {
 
-		// l, r, o := r1c.L.LinExp[0], r1c.R.LinExp[0], r1c.O.LinExp[0]
-		l := r1c.L.LinExp[0]
-		r := r1c.R.LinExp[0]
-		o := r1c.O.LinExp[0]
+		// l, r, o := r1c.L[0], r1c.R[0], r1c.O[0]
+		l := r1c.L[0]
+		r := r1c.R[0]
+		o := r1c.O[0]
 
 		// if the unsolved variable in not in o,
 		// ensure that it is in r1c.L
@@ -616,38 +620,38 @@ func (scs *sparseR1CS) r1cToSparseR1C(r1c compiled.R1C) {
 
 	var t compiled.Term
 
-	sort.Sort(r1c.R.LinExp)
+	sort.Sort(r1c.R)
 
 	// pop the constant term if it exists
-	coeffID, vID, visID := r1c.R.LinExp[0].Unpack()
+	coeffID, vID, visID := r1c.R[0].Unpack()
 
 	firstTermIsPublic := (visID == compiled.Public) && vID == 0
 	if !firstTermIsPublic {
 		coeffID = compiled.CoeffIdZero
-		t = scs.split(r1c.R.LinExp[0], r1c.R.LinExp[1:s-1])
+		t = scs.split(r1c.R[0], r1c.R[1:s-1])
 	} else {
 		if s == 2 {
 			t.SetCoeffID(compiled.CoeffIdZero)
 			scs.addConstraint(compiled.SparseR1C{
 				L: t,
-				R: r1c.R.LinExp[s-1],
-				M: [2]compiled.Term{t, r1c.R.LinExp[s-1]},
-				O: scs.negate(r1c.O.LinExp[0]),
+				R: r1c.R[s-1],
+				M: [2]compiled.Term{t, r1c.R[s-1]},
+				O: scs.negate(r1c.O[0]),
 				K: coeffID,
 			})
 			return
 		}
-		t = scs.split(r1c.R.LinExp[1], r1c.R.LinExp[2:s-1])
+		t = scs.split(r1c.R[1], r1c.R[2:s-1])
 	}
 
-	m1, m2 := t, r1c.R.LinExp[s-1]
+	m1, m2 := t, r1c.R[s-1]
 	m1.SetCoeffID(compiled.CoeffIdZero)
 	m2.SetCoeffID(compiled.CoeffIdZero)
 	scs.addConstraint(compiled.SparseR1C{
 		L: t,
-		R: r1c.R.LinExp[s-1],
+		R: r1c.R[s-1],
 		M: [2]compiled.Term{m1, m2},
-		O: scs.negate(r1c.O.LinExp[0]),
+		O: scs.negate(r1c.O[0]),
 		K: coeffID,
 	})
 
