@@ -305,7 +305,12 @@ func (cs *constraintSystem) IsZero(i1 interface{}) Variable {
 	// _ = inverse(m + a) 	// constrain m to be 1 if a == 0
 
 	// m is computed by the solver such that m = 1 - a^(modulus - 1)
-	m := cs.NewHint(hint.IsZero, a)
+	res, err := cs.NewHint(hint.IsZero, a)
+	if err != nil {
+		// the function errs only if the number of inputs is invalid.
+		panic(err)
+	}
+	m := res[0]
 	cs.addConstraint(newR1C(a, m, cs.constant(0)), debug)
 
 	cs.AssertIsBoolean(m)
@@ -346,7 +351,12 @@ func (cs *constraintSystem) ToBinary(i1 interface{}, n ...int) []Variable {
 	// allocate the resulting variables and bit-constraint them
 	b := make([]variable, nbBits)
 	for i := 0; i < nbBits; i++ {
-		b[i] = cs.NewHint(hint.IthBit, a, i).(variable)
+		res, err := cs.NewHint(hint.IthBit, a, i)
+		if err != nil {
+			// the function errs only if the number of inputs is incorrect
+			panic(err)
+		}
+		b[i] = res[0].(variable)
 		cs.AssertIsBoolean(b[i])
 	}
 
@@ -382,7 +392,12 @@ func (cs *constraintSystem) toBinaryUnsafe(a variable, nbBits int) []Variable {
 	// allocate the resulting variables and bit-constraint them
 	b := make([]variable, nbBits)
 	for i := 0; i < nbBits; i++ {
-		b[i] = cs.NewHint(hint.IthBit, a, i).(variable)
+		res, err := cs.NewHint(hint.IthBit, a, i)
+		if err != nil {
+			// the function errs only if the number of inputs is incorrect
+			panic(err)
+		}
+		b[i] = res[0].(variable)
 	}
 
 	// here what we do is we add a single constraint where

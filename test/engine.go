@@ -328,7 +328,14 @@ func (e *engine) Println(a ...interface{}) {
 	fmt.Println(sbb.String())
 }
 
-func (e *engine) NewHint(f hint.AnnotatedFunction, inputs ...interface{}) []frontend.Variable {
+func (e *engine) NewHint(f hint.AnnotatedFunction, inputs ...interface{}) ([]frontend.Variable, error) {
+	if nIn := f.TotalInputs(); nIn >= 0 && nIn != len(inputs) {
+		return nil, fmt.Errorf("expected %d inputs, got %d", nIn, len(inputs))
+	}
+	if f.TotalOutputs(len(inputs)) <= 0 {
+		return nil, fmt.Errorf("hint function must return at least one output")
+	}
+
 	in := make([]*big.Int, len(inputs))
 
 	for i := 0; i < len(inputs); i++ {
@@ -351,7 +358,7 @@ func (e *engine) NewHint(f hint.AnnotatedFunction, inputs ...interface{}) []fron
 		out[i] = res[i]
 	}
 
-	return out
+	return out, nil
 }
 
 // IsConstant returns true if v is a constant known at compile time
