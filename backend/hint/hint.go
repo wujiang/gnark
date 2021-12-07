@@ -65,6 +65,8 @@ the hint function hintFn to register a hint function in the package registry.
 package hint
 
 import (
+	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"math/big"
 	"reflect"
@@ -73,20 +75,99 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 )
 
-// ID is a unique identifier for an hint function. It is set by the package in
-// is used for lookup.
+// ID is a unique identifier for a hint function used for lookup.
 type ID uint32
 
 // Function defines how a hint is computed from the inputs. The hint value is
-// stored in result. If the hint is computable, then the functio must return a
-// nil error and non-nil error otherwise.
-type Function func(curveID ecc.ID, inputs []*big.Int, result *big.Int) error
+// stored in res. If the hint is computable, then the function must return a nil
+// error and non-nil error otherwise.
+type Function func(curveID ecc.ID, inputs []*big.Int, res []*big.Int) error
 
-// UUID returns a unique ID for the hint function. Multiple calls using same
-// function return the same ID.
-func UUID(hintFn Function) ID {
-	name := runtime.FuncForPC(reflect.ValueOf(hintFn).Pointer()).Name()
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(name))
-	return ID(h.Sum32())
+// AnnotatedFunction defines an annotated hint function.
+type AnnotatedFunction interface {
+	// UUID returns an unique identifier for the hint function. UUID is used for
+	// lookup of the hint function.
+	UUID() ID
+
+	// Call is invoked by the framework to obtain the result from inputs. It is
+	// ensured that the number of inputs is exactly TotalInputs() if it is
+	// non-negative. If TotalInputs() is negative, then the length of inputs is
+	// not bounded. The length of res is TotalOutputs() and every element is
+	// already initialized (but not necessarily to zero as the elements may be
+	// obtained from cache). A returned non-nil error will be propagated.
+	Call(curveID ecc.ID, inputs []*big.Int, res []*big.Int) error
+
+	// TotalInputs returns the total number of inputs accepted by the function.
+	// If the returned value is negative, then the function takes any number of
+	// inputs. If it is zero, then the function does not take any inputs.
+	TotalInputs() int
+
+	// TotalOutputs returns the total number of outputs by the function on
+	// nInputs number of inputs. The number of outputs must be at least one and
+	// the framework errors otherwise.
+	TotalOutputs(nInputs int) int
+
+	// String returns a human-readable description of the function used in logs
+	// and debug messages.
+	String() string
+}
+
+// fixedArgumentsFunction defines a function where the number of inputs and
+// outputs is fixed.
+type fixedArgumentsFunction struct {
+	fn   Function
+	nIn  int
+	nOut int
+}
+
+// NewFixedHint returns an AnnotatedFunction where the number of inputs and outputs
+// is constant. UUID is computed by combining fn, nIn and nOut and thus it is
+// legal to defined multiple AnnotatedFunctions on the same fn with different
+// nIn and nOut.
+func NewFixedHint(fn Function, nIn, nOut int) AnnotatedFunction {
+	return &fixedArgumentsFunction{
+		fn:   fn,
+		nIn:  nIn,
+		nOut: nOut,
+	}
+}
+
+func (h *fixedArgumentsFunction) Call(curveID ecc.ID, inputs []*big.Int, res []*big.Int) error {
+	if len(inputs) != h.nIn {
+		return fmt.Errorf("input has %d elements, expected %d", len(inputs), h.nIn)
+	}
+	if len(res) != h.nOut {
+		return fmt.Errorf("result has %d elements, expected %d", len(res), h.nOut)
+	}
+	return h.fn(curveID, inputs, res)
+}
+
+func (h *fixedArgumentsFunction) TotalInputs() int {
+	return h.nIn
+}
+
+func (h *fixedArgumentsFunction) TotalOutputs(_ int) int {
+	return h.nOut
+}
+
+func (h *fixedArgumentsFunction) UUID() ID {
+	var buf [8]byte
+	hf := fnv.New32a()
+	name := runtime.FuncForPC(reflect.ValueOf(h.fn).Pointer()).Name()
+	// using a name for identifying different hints should be enough as we get a
+	// solve-time error when there are duplicate hints with the same signature.
+	hf.Write([]byte(name))
+	// also feed in the number of input and output variables. This allows to use
+	// the same hint function with different signatures.
+	binary.BigEndian.PutUint64(buf[:], uint64(h.nIn))
+	hf.Write(buf[:])
+	binary.BigEndian.PutUint64(buf[:], uint64(h.nOut))
+	hf.Write(buf[:])
+	return ID(hf.Sum32())
+}
+
+func (h *fixedArgumentsFunction) String() string {
+	fnptr := reflect.ValueOf(h.fn).Pointer()
+	name := runtime.FuncForPC(fnptr).Name()
+	return fmt.Sprintf("%s([%d]*big.Int, [%d]*big.Int) at (%x)", name, h.TotalInputs(), h.TotalOutputs(0), fnptr)
 }
