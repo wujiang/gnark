@@ -167,7 +167,7 @@ func newConstraintSystem(curveID ecc.ID, initialCapacity ...int) constraintSyste
 //
 // No new constraints are added to the newly created wire and must be added
 // manually in the circuit. Failing to do so leads to solver failure.
-func (cs *constraintSystem) NewHint(f hint.Function, inputs ...interface{}) Variable {
+func (cs *constraintSystem) NewHint(f hint.AnnotatedFunction, inputs ...interface{}) []Variable {
 	// now we need to store the linear expressions of the expected input
 	// that will be resolved in the solver
 	hintInputs := make([]compiled.LinearExpression, len(inputs))

@@ -118,7 +118,7 @@ type API interface {
 	//
 	// No new constraints are added to the newly created wire and must be added
 	// manually in the circuit. Failing to do so leads to solver failure.
-	NewHint(f hint.Function, inputs ...interface{}) Variable
+	NewHint(f hint.AnnotatedFunction, inputs ...interface{}) []Variable
 
 	// Tag creates a tag at a given place in a circuit. The state of the tag may contain informations needed to
 	// measure constraints, variables and coefficients creations through AddCounter

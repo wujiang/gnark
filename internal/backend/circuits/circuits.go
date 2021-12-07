@@ -10,7 +10,7 @@ import (
 type TestCircuit struct {
 	Circuit                          frontend.Circuit
 	ValidWitnesses, InvalidWitnesses []frontend.Circuit // good and bad witness for the prover + public verifier data
-	HintFunctions                    []hint.Function
+	HintFunctions                    []hint.AnnotatedFunction
 }
 
 // Circuits are used for test purposes (backend.Groth16 and gnark/integration_test.go)
@@ -27,7 +27,7 @@ func addEntry(name string, circuit, proverGood, proverBad frontend.Circuit) {
 	Circuits[name] = TestCircuit{circuit, []frontend.Circuit{proverGood}, []frontend.Circuit{proverBad}, nil}
 }
 
-func addNewEntry(name string, circuit frontend.Circuit, proverGood, proverBad []frontend.Circuit, hintFunctions ...hint.Function) {
+func addNewEntry(name string, circuit frontend.Circuit, proverGood, proverBad []frontend.Circuit, hintFunctions ...hint.AnnotatedFunction) {
 	if Circuits == nil {
 		Circuits = make(map[string]TestCircuit)
 	}

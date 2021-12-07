@@ -328,22 +328,30 @@ func (e *engine) Println(a ...interface{}) {
 	fmt.Println(sbb.String())
 }
 
-func (e *engine) NewHint(f hint.Function, inputs ...interface{}) frontend.Variable {
+func (e *engine) NewHint(f hint.AnnotatedFunction, inputs ...interface{}) []frontend.Variable {
 	in := make([]*big.Int, len(inputs))
 
 	for i := 0; i < len(inputs); i++ {
 		v := e.toBigInt(inputs[i])
 		in[i] = &v
 	}
+	res := make([]*big.Int, f.TotalOutputs(len(inputs)))
+	for i := range res {
+		res[i] = new(big.Int)
+	}
 
-	var result big.Int
-	err := f(e.curveID, in, &result)
+	err := f.Call(e.curveID, in, res)
 
 	if err != nil {
 		panic("NewHint: " + err.Error())
 	}
 
-	return (result)
+	out := make([]frontend.Variable, len(res))
+	for i := range res {
+		out[i] = res[i]
+	}
+
+	return out
 }
 
 // IsConstant returns true if v is a constant known at compile time

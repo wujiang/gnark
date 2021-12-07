@@ -61,9 +61,9 @@ func NewProverOption(opts ...func(opt *ProverOption) error) (ProverOption, error
 
 // ProverOption is shared accross backends to parametrize calls to xxx.Prove(...)
 type ProverOption struct {
-	Force         bool            // default to false
-	HintFunctions []hint.Function // default to nil (use only solver std hints)
-	LoggerOut     io.Writer       // default to os.Stdout
+	Force         bool                     // default to false
+	HintFunctions []hint.AnnotatedFunction // default to nil (use only solver std hints)
+	LoggerOut     io.Writer                // default to os.Stdout
 }
 
 // IgnoreSolverError is a ProverOption that indicates that the Prove algorithm
@@ -77,7 +77,7 @@ func IgnoreSolverError(opt *ProverOption) error {
 
 // WithHints is a Prover option that specifies additional hint functions to be used
 // by the constraint solver
-func WithHints(hintFunctions ...hint.Function) func(opt *ProverOption) error {
+func WithHints(hintFunctions ...hint.AnnotatedFunction) func(opt *ProverOption) error {
 	return func(opt *ProverOption) error {
 		opt.HintFunctions = append(opt.HintFunctions, hintFunctions...)
 		return nil
