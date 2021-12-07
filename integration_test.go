@@ -17,6 +17,7 @@ limitations under the License.
 package gnark
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 
@@ -46,11 +47,6 @@ func TestIntegrationAPI(t *testing.T) {
 		for _, w := range tData.InvalidWitnesses {
 			assert.ProverFailed(tData.Circuit, w, test.WithProverOpts(backend.WithHints(tData.HintFunctions...)))
 		}
-
-		// we put that here now, but will be into a proper fuzz target with go1.18
-		const fuzzCount = 30
-		assert.Fuzz(tData.Circuit, fuzzCount, test.WithProverOpts(backend.WithHints(tData.HintFunctions...)))
-
 	}
 
 }
