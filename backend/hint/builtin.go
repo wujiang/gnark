@@ -1,7 +1,6 @@
 package hint
 
 import (
-	"errors"
 	"math/big"
 	"sync"
 
@@ -12,9 +11,9 @@ var initBuiltinOnce sync.Once
 
 func init() {
 	initBuiltinOnce.Do(func() {
-		IsZero = builtinIsZero
+		IsZero = NewFixedHint(builtinIsZero, 1, 1)
 		Register(IsZero)
-		IthBit = builtinIthBit
+		IthBit = NewFixedHint(builtinIthBit, 2, 1)
 		Register(IthBit)
 	})
 }
@@ -25,18 +24,16 @@ var (
 	// IsZero computes the value 1 - a^(modulus-1) for the single input a. This
 	// corresponds to checking if a == 0 (for which the function returns 1) or a
 	// != 0 (for which the function returns 0).
-	IsZero Function
+	IsZero AnnotatedFunction
 
 	// IthBit returns the i-tb bit the input. The function expects exactly two
 	// integer inputs i and n, takes the little-endian bit representation of n and
 	// returns its i-th bit.
-	IthBit Function
+	IthBit AnnotatedFunction
 )
 
-func builtinIsZero(curveID ecc.ID, inputs []*big.Int, result *big.Int) error {
-	if len(inputs) != 1 {
-		return errors.New("IsZero expects one input")
-	}
+func builtinIsZero(curveID ecc.ID, inputs []*big.Int, results []*big.Int) error {
+	result := results[0]
 
 	// get fr modulus
 	q := curveID.Info().Fr.Modulus()
@@ -56,10 +53,8 @@ func builtinIsZero(curveID ecc.ID, inputs []*big.Int, result *big.Int) error {
 	return nil
 }
 
-func builtinIthBit(_ ecc.ID, inputs []*big.Int, result *big.Int) error {
-	if len(inputs) != 2 {
-		return errors.New("ithBit expects 2 inputs; inputs[0] == value, inputs[1] == bit position")
-	}
+func builtinIthBit(_ ecc.ID, inputs []*big.Int, results []*big.Int) error {
+	result := results[0]
 	if !inputs[1].IsUint64() {
 		result.SetUint64(0)
 		return nil

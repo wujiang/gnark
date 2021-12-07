@@ -5,27 +5,27 @@ import (
 	"sync"
 )
 
-var registry = make(map[ID]Function)
+var registry = make(map[ID]AnnotatedFunction)
 var registryM sync.RWMutex
 
-// Register registers a hint function in the global registry. All registered
-// hint functions can be retrieved with a call to GetAll(). It is an error to
-// register a single function twice and results in a panic.
-func Register(hintFn Function) {
+// Register registers an annotated hint function in the global registry. All
+// registered hint functions can be retrieved with a call to GetAll(). It is an
+// error to register a single function twice and results in a panic.
+func Register(hintFn AnnotatedFunction) {
 	registryM.Lock()
 	defer registryM.Unlock()
-	key := UUID(hintFn)
+	key := hintFn.UUID()
 	if _, ok := registry[key]; ok {
-		panic(fmt.Sprintf("function %d registered twice", key))
+		panic(fmt.Sprintf("function %s registered twice", hintFn))
 	}
 	registry[key] = hintFn
 }
 
 // GetAll returns all registered hint functions.
-func GetAll() []Function {
+func GetAll() []AnnotatedFunction {
 	registryM.RLock()
 	defer registryM.RUnlock()
-	ret := make([]Function, 0, len(registry))
+	ret := make([]AnnotatedFunction, 0, len(registry))
 	for _, v := range registry {
 		ret = append(ret, v)
 	}
