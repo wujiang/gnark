@@ -42,7 +42,7 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 			NbSecretVariables:   len(cs.secret.variables.variables),
 			DebugInfo:           make([]compiled.LogEntry, len(cs.debugInfo)),
 			Logs:                make([]compiled.LogEntry, len(cs.logs)),
-			MHints:              make(map[int]compiled.Hint, len(cs.mHints)),
+			MHints:              make(map[int]*compiled.Hint),
 			MDebug:              make(map[int]int),
 			Counters:            make([]compiled.Counter, len(cs.counters)),
 		},
@@ -107,14 +107,20 @@ func (cs *constraintSystem) toR1CS(curveID ecc.ID) (CompiledConstraintSystem, er
 	}
 
 	// we need to offset the ids in the hints
-	for vID, hint := range cs.mHints {
-		k := shiftVID(vID, compiled.Internal)
+	for _, hint := range cs.mHints {
+		ws := make([]int, len(hint.Wires))
+		for i, vID := range hint.Wires {
+			ws[i] = shiftVID(vID, compiled.Internal)
+		}
 		inputs := make([]compiled.LinearExpression, len(hint.Inputs))
 		copy(inputs, hint.Inputs)
 		for j := 0; j < len(inputs); j++ {
 			offsetIDs(inputs[j])
 		}
-		res.MHints[k] = compiled.Hint{ID: hint.ID, Inputs: inputs}
+		ch := &compiled.Hint{ID: hint.ID, Inputs: inputs, Wires: ws}
+		for _, vID := range ws {
+			res.MHints[vID] = ch
+		}
 	}
 
 	// we need to offset the ids in logs & debugInfo

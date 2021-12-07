@@ -25,7 +25,7 @@ type CS struct {
 
 	// maps wire id to hint
 	// a wire may point to at most one hint
-	MHints map[int]Hint
+	MHints map[int]*Hint
 
 	// maps constraint id to debugInfo id
 	// several constraints may point to the same debug info
@@ -52,6 +52,7 @@ const (
 type Hint struct {
 	ID     hint.ID            // hint function id
 	Inputs []LinearExpression // terms to inject in the hint function
+	Wires  []int              // IDs of wires the hint outputs map to
 }
 
 // GetNbVariables return number of internal, secret and public variables
